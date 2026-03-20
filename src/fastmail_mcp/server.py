@@ -22,10 +22,7 @@ from fastmail_mcp.tools.email_tools import (
 
 # --- FastMCP Setup ---
 
-mcp = FastMCP(
-    "Fastmail MCP Server",
-    description="Access Fastmail emails via JMAP with label filtering and AI summaries.",
-)
+mcp = FastMCP("Fastmail MCP Server")
 
 
 @mcp.tool()
