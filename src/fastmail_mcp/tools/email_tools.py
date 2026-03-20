@@ -61,13 +61,16 @@ async def search_emails(query: str, label: str) -> list[dict]:
         return []
 
     # Query emails in the mailbox
+    # NOTE: Fastmail JMAP returns 0 results when text is empty string,
+    # so we only include the text filter when a query is actually provided.
+    query_filter: dict = {"inMailbox": mailbox_id}
+    if query:
+        query_filter["text"] = query
+
     query_result = await jmap_client.method_call(
         "Email/query",
         {
-            "filter": {
-                "inMailbox": mailbox_id,
-                "text": query,
-            },
+            "filter": query_filter,
             "sort": [{"property": "receivedAt", "isAscending": False}],
             "limit": 20,
         },

@@ -169,7 +169,7 @@ async def lifespan(app: Starlette) -> AsyncIterator[None]:
         yield
 
 
-app = Starlette(
+_inner_app = Starlette(
     debug=False,
     lifespan=lifespan,
     middleware=[Middleware(AuthMiddleware)],
@@ -183,6 +183,14 @@ app = Starlette(
         Mount("/mcp", app=handle_mcp),
     ],
 )
+
+
+async def app(scope, receive, send):
+    """ASGI wrapper: normalize /mcp to /mcp/ to avoid Mount's 307 redirect."""
+    if scope["type"] == "http" and scope["path"] == "/mcp":
+        scope = dict(scope)
+        scope["path"] = "/mcp/"
+    await _inner_app(scope, receive, send)
 
 
 async def run() -> None:
