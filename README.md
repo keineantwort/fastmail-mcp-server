@@ -121,4 +121,4 @@ ruff check src/ tests/
 
 ## License
 
-MIT
+[MIT](LICENSE)
