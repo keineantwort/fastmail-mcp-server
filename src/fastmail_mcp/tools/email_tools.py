@@ -1,6 +1,10 @@
 """MCP tool definitions for Fastmail email operations."""
 
+import logging
+
 from fastmail_mcp.config import settings
+
+logger = logging.getLogger(__name__)
 from fastmail_mcp.jmap.client import jmap_client
 from fastmail_mcp.jmap.mailbox import get_all_mailboxes, get_mailbox_id_by_name
 from fastmail_mcp.oauth.scopes import require_scope
@@ -55,9 +59,11 @@ async def search_emails(query: str, label: str) -> list[dict]:
         List of email summaries with id, subject, from, date, and AI summary.
     """
     require_scope("mail:read")
+    logger.info("search_emails called: query=%r, label=%r", query, label)
 
     mailbox_id = await get_mailbox_id_by_name(label)
     if mailbox_id is None:
+        logger.warning("Label %r not found as mailbox", label)
         return []
 
     # Query emails in the mailbox
@@ -66,6 +72,8 @@ async def search_emails(query: str, label: str) -> list[dict]:
     query_filter: dict = {"inMailbox": mailbox_id}
     if query:
         query_filter["text"] = query
+
+    logger.info("JMAP filter: %s", query_filter)
 
     query_result = await jmap_client.method_call(
         "Email/query",
@@ -77,6 +85,7 @@ async def search_emails(query: str, label: str) -> list[dict]:
     )
 
     email_ids = query_result.get("ids", [])
+    logger.info("JMAP returned %d email IDs", len(email_ids))
     if not email_ids:
         return []
 
@@ -91,11 +100,14 @@ async def search_emails(query: str, label: str) -> list[dict]:
 
     all_mailboxes = await get_all_mailboxes()
     allowlist_ids, denylist_ids = _resolve_label_ids(all_mailboxes)
+    logger.info("Allowlist IDs: %s, Denylist IDs: %s", allowlist_ids, denylist_ids)
 
     results = []
     for email in get_result.get("list", []):
         email_mailbox_ids = set(email.get("mailboxIds", {}).keys())
         if not _is_allowed(email_mailbox_ids, allowlist_ids, denylist_ids):
+            email_labels = [all_mailboxes.get(m, m) for m in email_mailbox_ids]
+            logger.info("FILTERED OUT: %r labels=%s", email.get("subject"), email_labels)
             continue
 
         summary = await summarize_text(email.get("preview", ""))
