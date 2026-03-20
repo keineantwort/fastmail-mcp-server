@@ -47,7 +47,7 @@ async def search_emails_tool(query: str, label: str) -> list[dict]:
 async def get_email_details_tool(message_id: str) -> dict:
     """Fetch full email details with cleaned body text.
 
-    Blocks access to emails with the 'Denylist' label.
+    Blocks access to emails not matching the allowlist or on the denylist.
 
     Args:
         message_id: The JMAP email ID.

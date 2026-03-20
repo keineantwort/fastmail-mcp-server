@@ -1,13 +1,47 @@
 """MCP tool definitions for Fastmail email operations."""
 
+from fastmail_mcp.config import settings
 from fastmail_mcp.jmap.client import jmap_client
 from fastmail_mcp.jmap.mailbox import get_all_mailboxes, get_mailbox_id_by_name
 from fastmail_mcp.oauth.scopes import require_scope
 from fastmail_mcp.utils.quote_cleaner import clean_quoted_text
 from fastmail_mcp.utils.summarizer import summarize_text
 
-# Label that blocks access entirely
-DENYLIST_LABEL = "Denylist"
+
+def _resolve_label_ids(all_mailboxes: dict[str, str]) -> tuple[set[str], set[str]]:
+    """Resolve allowlist and denylist label names to mailbox IDs.
+
+    Returns:
+        (allowlist_ids, denylist_ids) — allowlist_ids is empty when no
+        allowlist is configured (= allow all).
+    """
+    allowlist_ids = set()
+    for label in settings.allowlist_labels:
+        for mid, name in all_mailboxes.items():
+            if name == label:
+                allowlist_ids.add(mid)
+
+    denylist_ids = {
+        mid for mid, name in all_mailboxes.items()
+        if name == settings.denylist_label
+    }
+    return allowlist_ids, denylist_ids
+
+
+def _is_allowed(email_mailbox_ids: set[str], allowlist_ids: set[str], denylist_ids: set[str]) -> bool:
+    """Check whether an email passes the allowlist→denylist filter chain.
+
+    1. If an allowlist is configured, the email must be in at least one
+       allowlisted mailbox.  Otherwise it is dropped.
+    2. If the email is in any denylisted mailbox, it is dropped.
+    """
+    # Step 1: allowlist (skip if not configured)
+    if allowlist_ids and not (email_mailbox_ids & allowlist_ids):
+        return False
+    # Step 2: denylist
+    if email_mailbox_ids & denylist_ids:
+        return False
+    return True
 
 
 async def search_emails(query: str, label: str) -> list[dict]:
@@ -52,14 +86,13 @@ async def search_emails(query: str, label: str) -> list[dict]:
         },
     )
 
-    # Filter: check none have the denylist label
     all_mailboxes = await get_all_mailboxes()
-    denylist_ids = {mid for mid, name in all_mailboxes.items() if name == DENYLIST_LABEL}
+    allowlist_ids, denylist_ids = _resolve_label_ids(all_mailboxes)
 
     results = []
     for email in get_result.get("list", []):
         email_mailbox_ids = set(email.get("mailboxIds", {}).keys())
-        if email_mailbox_ids & denylist_ids:
+        if not _is_allowed(email_mailbox_ids, allowlist_ids, denylist_ids):
             continue
 
         summary = await summarize_text(email.get("preview", ""))
@@ -77,7 +110,7 @@ async def search_emails(query: str, label: str) -> list[dict]:
 async def get_email_details(message_id: str) -> dict:
     """Fetch full email details with cleaned body.
 
-    HARD-BLOCKS any email with the 'Denylist' label.
+    HARD-BLOCKS any email that fails the allowlist/denylist filter.
 
     Args:
         message_id: JMAP email ID.
@@ -106,13 +139,13 @@ async def get_email_details(message_id: str) -> dict:
 
     email = emails[0]
 
-    # HARD-BLOCK: check denylist
+    # HARD-BLOCK: allowlist → denylist
     all_mailboxes = await get_all_mailboxes()
-    denylist_ids = {mid for mid, name in all_mailboxes.items() if name == DENYLIST_LABEL}
+    allowlist_ids, denylist_ids = _resolve_label_ids(all_mailboxes)
     email_mailbox_ids = set(email.get("mailboxIds", {}).keys())
 
-    if email_mailbox_ids & denylist_ids:
-        return {"error": "Access denied: this email is on the denylist."}
+    if not _is_allowed(email_mailbox_ids, allowlist_ids, denylist_ids):
+        return {"error": "Access denied: this email is not in the allowlist or is on the denylist."}
 
     # Extract and clean body text
     body_values = email.get("bodyValues", {})
@@ -179,16 +212,15 @@ async def summarize_thread(thread_id: str) -> dict:
         },
     )
 
-    # Filter out denylisted emails
     all_mailboxes = await get_all_mailboxes()
-    denylist_ids = {mid for mid, name in all_mailboxes.items() if name == DENYLIST_LABEL}
+    allowlist_ids, denylist_ids = _resolve_label_ids(all_mailboxes)
 
     thread_text_parts = []
     emails_meta = []
 
     for email in get_result.get("list", []):
         email_mailbox_ids = set(email.get("mailboxIds", {}).keys())
-        if email_mailbox_ids & denylist_ids:
+        if not _is_allowed(email_mailbox_ids, allowlist_ids, denylist_ids):
             continue
 
         preview = email.get("preview", "")

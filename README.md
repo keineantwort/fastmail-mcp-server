@@ -7,7 +7,10 @@ An [MCP](https://modelcontextprotocol.io/) server that gives AI assistants secur
 - **Email search** — query emails within specific labels/mailboxes
 - **Email details** — fetch full message bodies with automatic quote stripping
 - **Thread summaries** — AI-powered one-sentence summaries via any OpenAI-compatible API
-- **Denylist** — emails labeled "Denylist" are hard-blocked from AI access
+- **Label filter** — two-stage allowlist → denylist filter:
+  - **Allowlist**: when configured, only emails with at least one allowed label are visible
+  - **Denylist**: emails with the denylist label are hard-blocked from all AI access
+  - Denylist takes precedence — an email on both lists is blocked
 - **OAuth2 proxy** — RFC 8414 / RFC 9728 authorization flow, proxied through an OAuth2 provider (e.g. Authentik, Keycloak, Authelia)
 - **Token introspection** — Bearer tokens validated and cached against your OAuth2 provider
 - **Scope enforcement** — `mail:read` / `mail:write` scopes checked per tool call
@@ -74,6 +77,8 @@ All settings are configured via environment variables (or a `.env` file).
 |---|---|---|---|
 | `FASTMAIL_API_TOKEN` | yes | — | Fastmail API token |
 | `FASTMAIL_JMAP_URL` | no | `https://api.fastmail.com/jmap/session` | JMAP session URL |
+| `ALLOWLIST_LABELS` | no | `[]` | JSON list of label names — only emails with these labels are visible (empty = allow all) |
+| `DENYLIST_LABEL` | no | `Denylist` | Label name — emails with this label are hard-blocked |
 | `AUTHENTIK_URL` | yes | — | Base URL of your OAuth2 provider |
 | `AUTHENTIK_CLIENT_ID` | no | `fastmail-mcp` | OAuth2 client ID |
 | `AUTHENTIK_CLIENT_SECRET` | no | `""` | OAuth2 client secret |

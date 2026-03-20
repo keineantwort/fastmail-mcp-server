@@ -16,6 +16,10 @@ class Settings(BaseSettings):
     mcp_host: str = "0.0.0.0"
     mcp_port: int = 8000
 
+    # Label filtering
+    allowlist_labels: list[str] = []
+    denylist_label: str = "Denylist"
+
     # LLM Summarization (OpenAI-compatible API)
     llm_api_url: str = "https://api.deepinfra.com/v1/openai/chat/completions"
     llm_api_key: str = ""
