@@ -1,21 +1,23 @@
 """Main entry point: MCP server with OAuth proxy and JMAP integration."""
 
+import contextlib
 import logging
+from collections.abc import AsyncIterator
 
 import anyio
 import httpx
 import uvicorn
 from mcp.server.fastmcp import FastMCP
-from mcp.server.sse import SseServerTransport
+from mcp.server.streamable_http_manager import StreamableHTTPSessionManager
 from starlette.applications import Starlette
+from starlette.middleware import Middleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, RedirectResponse
 from starlette.routing import Mount, Route
 from urllib.parse import urlencode, parse_qs
 
 from fastmail_mcp.config import settings
-from fastmail_mcp.oauth.scopes import set_scopes
-from fastmail_mcp.oauth.token_cache import token_introspector
+from fastmail_mcp.middleware import AuthMiddleware
 from fastmail_mcp.tools.email_tools import (
     get_email_details,
     search_emails,
@@ -69,30 +71,12 @@ async def sync_fastmail_tool() -> dict:
     return await sync_fastmail()
 
 
-# --- SSE Transport ---
+# --- Streamable HTTP Transport ---
 
-sse = SseServerTransport("/messages/")
-
-
-# --- Helper ---
-
-def _extract_bearer(request: Request) -> str | None:
-    auth_header = request.headers.get("authorization", "")
-    if not auth_header.startswith("Bearer "):
-        return None
-    return auth_header[7:]
-
-
-async def _validate_token(token: str) -> set[str]:
-    """Validate token via introspection and return granted scopes.
-
-    Raises PermissionError if the token is invalid.
-    """
-    result = await token_introspector.introspect(token)
-    if result is None:
-        raise PermissionError("Token invalid or expired")
-    scope_str = result.get("scope", "")
-    return set(scope_str.split()) if scope_str else set()
+session_manager = StreamableHTTPSessionManager(
+    app=mcp._mcp_server,
+    stateless=False,
+)
 
 
 # --- OAuth Proxy Endpoints ---
@@ -171,66 +155,24 @@ async def health(request: Request):
     return JSONResponse({"status": "ok"})
 
 
-# --- MCP SSE Endpoints ---
+# --- MCP Streamable HTTP Endpoint ---
 
-async def handle_sse(request: Request):
-    token = _extract_bearer(request)
-    if not token:
-        return JSONResponse(
-            {"error": "Unauthorized"},
-            status_code=401,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    try:
-        scopes = await _validate_token(token)
-    except PermissionError:
-        return JSONResponse(
-            {"error": "Unauthorized – token invalid or expired"},
-            status_code=401,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-
-    set_scopes(scopes)
-    logger.info("SSE connected, granted scopes: %s", scopes)
-
-    async with sse.connect_sse(
-        request.scope, request.receive, request._send
-    ) as streams:
-        await mcp._mcp_server.run(
-            streams[0],
-            streams[1],
-            mcp._mcp_server.create_initialization_options(),
-        )
-
-
-async def handle_messages(scope, receive, send):
-    request = Request(scope, receive, send)
-    token = _extract_bearer(request)
-    if not token:
-        response = JSONResponse(
-            {"error": "Unauthorized"},
-            status_code=401,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        await response(scope, receive, send)
-        return
-    try:
-        await _validate_token(token)
-    except PermissionError:
-        response = JSONResponse(
-            {"error": "Unauthorized – token invalid or expired"},
-            status_code=401,
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-        await response(scope, receive, send)
-        return
-    await sse.handle_post_message(scope, receive, send)
+async def handle_mcp(scope, receive, send):
+    await session_manager.handle_request(scope, receive, send)
 
 
 # --- Starlette App ---
 
+@contextlib.asynccontextmanager
+async def lifespan(app: Starlette) -> AsyncIterator[None]:
+    async with session_manager.run():
+        yield
+
+
 app = Starlette(
     debug=False,
+    lifespan=lifespan,
+    middleware=[Middleware(AuthMiddleware)],
     routes=[
         Route("/.well-known/oauth-authorization-server", endpoint=oauth_metadata),
         Route("/.well-known/oauth-protected-resource", endpoint=oauth_protected_resource),
@@ -238,8 +180,7 @@ app = Starlette(
         Route("/oauth/token", endpoint=oauth_token, methods=["POST"]),
         Route("/oauth/register", endpoint=oauth_register, methods=["POST"]),
         Route("/health", endpoint=health),
-        Route("/sse", endpoint=handle_sse),
-        Mount("/messages/", app=handle_messages),
+        Mount("/mcp", app=handle_mcp),
     ],
 )
 

@@ -101,9 +101,11 @@ The server exposes an OAuth2 proxy that delegates authentication to your identit
 | Endpoint | Method | Description |
 |---|---|---|
 | `/.well-known/oauth-authorization-server` | GET | RFC 8414 metadata |
+| `/.well-known/oauth-protected-resource` | GET | RFC 9728 resource metadata |
 | `/oauth/register` | POST | Dynamic client registration |
 | `/oauth/authorize` | GET | Authorization (proxied to your IdP) |
 | `/oauth/token` | POST | Token exchange (proxied to your IdP) |
+| `/mcp` | POST/GET/DELETE | MCP Streamable HTTP transport (Bearer token required) |
 | `/health` | GET | Health check |
 
 ## Development
