@@ -67,11 +67,12 @@ async def search_emails(query: str, label: str) -> list[dict]:
         return []
 
     # Query emails in the mailbox
-    # NOTE: Fastmail JMAP returns 0 results when text is empty string,
-    # so we only include the text filter when a query is actually provided.
+    # NOTE: Fastmail JMAP returns 0 results for empty string or wildcard "*".
+    # Only include the text filter when a real search term is provided.
+    clean_query = query.strip().strip("*") if query else ""
     query_filter: dict = {"inMailbox": mailbox_id}
-    if query:
-        query_filter["text"] = query
+    if clean_query:
+        query_filter["text"] = clean_query
 
     logger.info("JMAP filter: %s", query_filter)
 

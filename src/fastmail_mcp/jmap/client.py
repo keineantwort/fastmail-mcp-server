@@ -44,6 +44,11 @@ class JMAPClient:
         self._api_url = self._session["apiUrl"]
         self._account_id = self._session["primaryAccounts"]["urn:ietf:params:jmap:mail"]
 
+    async def _ensure_connected(self) -> None:
+        """Auto-connect if session is not yet initialized."""
+        if self._account_id is None:
+            await self.connect()
+
     async def method_call(self, method: str, args: dict) -> dict:
         """Execute a single JMAP method call.
 
@@ -54,6 +59,7 @@ class JMAPClient:
         Returns:
             The methodResponse data for the call.
         """
+        await self._ensure_connected()
         args.setdefault("accountId", self.account_id)
 
         request_body = {
@@ -90,6 +96,7 @@ class JMAPClient:
         Returns:
             List of response data dicts in order.
         """
+        await self._ensure_connected()
         method_calls = []
         for method, args, call_id in calls:
             args.setdefault("accountId", self.account_id)
