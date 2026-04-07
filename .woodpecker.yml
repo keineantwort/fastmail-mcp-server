@@ -1,0 +1,34 @@
+# fastmail-mcp-server — Woodpecker CI Pipeline
+#
+# Trigger: Push auf main
+#   1. Docker-Image bauen und nach 192.168.6.39:5000/fastmail-mcp:latest pushen
+#   2. Auf dem Ziel-LXC den Stack neu deployen
+#
+# Secrets (org-level in Woodpecker):
+#   SSH_DEPLOY_KEY  — privater Ed25519-Key, Public Key auf allen LXC-Hosts
+
+when:
+  - event: push
+    branch: main
+
+steps:
+
+  build-and-push:
+    image: woodpecker-plugins/docker
+    settings:
+      registry: 192.168.6.39:5000
+      repo: 192.168.6.39:5000/fastmail-mcp
+      tags: latest
+      insecure: true
+
+  deploy:
+    image: appleboy/drone-ssh
+    depends_on: [build-and-push]
+    settings:
+      host: 192.168.6.178
+      username: root
+      key:
+        from_secret: SSH_DEPLOY_KEY
+      script:
+        - git -C /srv/homelab pull
+        - docker compose -f /srv/homelab/docker-compose/fastmail-mcp.yml --project-name fastmail-mcp up -d --pull always

@@ -7,6 +7,6 @@ COPY src/ src/
 
 RUN pip install --no-cache-dir .
 
-EXPOSE 8000
+EXPOSE 8001
 
 CMD ["python", "-m", "fastmail_mcp.server"]
