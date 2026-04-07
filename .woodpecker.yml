@@ -14,12 +14,9 @@ when:
 steps:
 
   build-and-push:
-    image: woodpecker-plugins/docker
-    settings:
-      registry: 192.168.6.39:5000
-      repo: 192.168.6.39:5000/fastmail-mcp
-      tags: latest
-      insecure: true
+    image: gcr.io/kaniko-project/executor:debug
+    commands:
+      - /kaniko/executor --context=dir://$(pwd) --dockerfile=$(pwd)/Dockerfile --destination=192.168.6.39:5000/fastmail-mcp:latest --insecure
 
   deploy:
     image: appleboy/drone-ssh
