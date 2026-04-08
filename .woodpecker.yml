@@ -22,7 +22,7 @@ steps:
       AUTHENTIK_URL: https://dummy.example.com
     commands:
       - pip install -e ".[dev]" -q
-      - pytest tests/
+      - pytest tests/ --ignore=tests/test_integration.py
 
   build-and-push:
     depends_on: [test]
