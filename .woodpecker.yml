@@ -51,5 +51,5 @@ steps:
       FORGEJO_READ_TOKEN:
         from_secret: FORGEJO_READ_TOKEN
     commands:
-      - git clone --mirror https://oauth2:$FORGEJO_READ_TOKEN@forgejo.home.msc.wtf/martin/fastmail-mcp.git /tmp/mirror
-      - cd /tmp/mirror && git push --mirror https://keineantwort:$GITHUB_TOKEN@github.com/keineantwort/fastmail-mcp.git
+      - git clone --mirror https://oauth2:$FORGEJO_READ_TOKEN@forgejo.home.msc.wtf/martin/fastmail-mcp-server.git /tmp/mirror
+      - cd /tmp/mirror && git push --mirror https://keineantwort:$GITHUB_TOKEN@github.com/keineantwort/fastmail-mcp-server.git
