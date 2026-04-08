@@ -17,6 +17,9 @@ steps:
 
   test:
     image: python:3.11-slim
+    environment:
+      FASTMAIL_API_TOKEN: dummy
+      AUTHENTIK_URL: https://dummy.example.com
     commands:
       - pip install -e ".[dev]" -q
       - pytest tests/
