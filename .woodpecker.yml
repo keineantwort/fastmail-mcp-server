@@ -5,7 +5,9 @@
 #   2. Auf dem Ziel-LXC den Stack neu deployen
 #
 # Secrets (org-level in Woodpecker):
-#   SSH_DEPLOY_KEY  — privater Ed25519-Key, Public Key auf allen LXC-Hosts
+#   SSH_DEPLOY_KEY      — privater Ed25519-Key, Public Key auf allen LXC-Hosts
+#   GITHUB_TOKEN        — GitHub PAT mit public_repo-Scope
+#   FORGEJO_READ_TOKEN  — Forgejo PAT (Username: oauth2)
 
 when:
   - event: push
@@ -13,7 +15,14 @@ when:
 
 steps:
 
+  test:
+    image: python:3.11-slim
+    commands:
+      - pip install -e ".[dev]" -q
+      - pytest tests/
+
   build-and-push:
+    depends_on: [test]
     image: gcr.io/kaniko-project/executor:debug
     commands:
       - /kaniko/executor --context=dir://$(pwd) --dockerfile=$(pwd)/Dockerfile --destination=192.168.6.39:5000/fastmail-mcp:latest --insecure
@@ -29,3 +38,15 @@ steps:
       script:
         - git -C /srv/homelab pull
         - docker compose -f /srv/homelab/docker-compose/fastmail-mcp.yml --project-name fastmail-mcp up -d --pull always
+
+  sync-github:
+    image: alpine/git
+    depends_on: [deploy]
+    environment:
+      GITHUB_TOKEN:
+        from_secret: GITHUB_TOKEN
+      FORGEJO_READ_TOKEN:
+        from_secret: FORGEJO_READ_TOKEN
+    commands:
+      - git clone --mirror https://oauth2:$FORGEJO_READ_TOKEN@forgejo.home.msc.wtf/martin/fastmail-mcp.git /tmp/mirror
+      - cd /tmp/mirror && git push --mirror https://keineantwort:$GITHUB_TOKEN@github.com/keineantwort/fastmail-mcp.git
