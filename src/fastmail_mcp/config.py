@@ -23,7 +23,7 @@ class Settings(BaseSettings):
     # LLM Summarization (OpenAI-compatible API)
     llm_api_url: str = "https://api.deepinfra.com/v1/openai/chat/completions"
     llm_api_key: str = ""
-    llm_model: str = "meta-llama/Meta-Llama-3-8B-Instruct"
+    llm_model: str = "meta-llama/Llama-4-Scout-17B-16E-Instruct"
 
     # Token cache TTL (seconds)
     token_cache_ttl: int = 300  # 5 minutes
